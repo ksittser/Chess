@@ -7,6 +7,8 @@
  * inputs like "Nae5" aren't processed properly
  * check/checkmate (moving into check??)
  * draws??
+ * AI's pawns don't promote
+ * typing "0-0" gives "ILLEGAL PROMOTION"
  */
 
 
@@ -471,38 +473,137 @@ vector<pair<int,int>> Board::possibleMovesFrom(int y,int x) {
             break;
         case 'P':
             if (board.at(y).at(x) == 'P') {
-                if (getColorByPiece(board.at(y+1).at(x)) == NOCOLOR)
+                if (y<7 && getColorByPiece(board.at(y+1).at(x)) == NOCOLOR)
                     moves.push_back(make_pair(y+1,x));
                 if (y==1 && getColorByPiece(board.at(y+2).at(x)) == NOCOLOR)
                     moves.push_back(make_pair(y+2,x));
+                if (y<7 && x<7 && getColorByPiece(board.at(y+1).at(x+1)) != pieceColor && getColorByPiece(board.at(y+1).at(x+1)) != NOCOLOR)
+                    moves.push_back(make_pair(y+1,x+1));
+                if (y<7 && x>0 && getColorByPiece(board.at(y+1).at(x-1)) != pieceColor && getColorByPiece(board.at(y+1).at(x-1)) != NOCOLOR)
+                    moves.push_back(make_pair(y+1,x-1));
             }
             else {
-                if (getColorByPiece(board.at(y-1).at(x)) == NOCOLOR)
+                if (y>0 && getColorByPiece(board.at(y-1).at(x)) == NOCOLOR)
                     moves.push_back(make_pair(y-1,x));
                 if (y==6 && getColorByPiece(board.at(y-2).at(x)) == NOCOLOR)
                     moves.push_back(make_pair(y-2,x));
+                if (y>0 && x<7 && getColorByPiece(board.at(y-1).at(x+1)) != pieceColor && getColorByPiece(board.at(y-1).at(x+1)) != NOCOLOR)
+                    moves.push_back(make_pair(y-1,x+1));
+                if (y>0 && x>0 && getColorByPiece(board.at(y-1).at(x-1)) != pieceColor && getColorByPiece(board.at(y-1).at(x-1)) != NOCOLOR)
+                    moves.push_back(make_pair(y-1,x-1));
             }
     }
     return moves;
 }
-vector<pair<pair<int,int>,pair<int,int>>> Board::possibleMoves() {
-    // return vector of all possible moves that can be made on board (format is origin coords, then destination coords)
+vector<pair<pair<int,int>,pair<int,int>>> Board::possibleMoves(Color c) {
+    // return vector of all possible moves that can be made on board for input color (or both colors if NOCOLOR) (format is origin coords, then destination coords)
     vector<pair<pair<int,int>,pair<int,int>>> moves;
     for (int i=0; i<8; i++)
         for (int j=0; j<8; j++)
-            if (board.at(i).at(j) != ' ') {
-                vector<pair<int,int>> movesPiece = possibleMovesFrom(i,j);
-                for (pair<int,int> p : movesPiece)
-                    moves.push_back(make_pair(make_pair(i,j),p));
-            }
+            if (board.at(i).at(j) != ' ')
+                if (getColorByPiece(board.at(i).at(j)) == c || c == NOCOLOR) {
+                    vector<pair<int,int>> movesPiece = possibleMovesFrom(i,j);
+                    for (pair<int,int> p : movesPiece)
+                        moves.push_back(make_pair(make_pair(i,j),p));
+                }
     return moves;
+}
+string Board::aiMove() {
+    // AI makes a move and returns notation string
+    int AIDEPTH = 5;
+    
+    Node* root = new Node(this);
+    pair<int,Node*> maxNode = (mv==WHITE ? root->maxChild(mv,AIDEPTH) : root->minChild(mv,AIDEPTH));
+    pair<pair<int,int>,pair<int,int>> move;
+    move = maxNode.second->move;
+    string s = "";
+    if (toupper(board.at(move.first.first).at(move.first.second)) != 'P')
+        s += toupper(board.at(move.first.first).at(move.first.second));
+    if (board.at(move.second.first).at(move.second.second) != ' ')
+        s += "x";
+    switch (move.second.second) {
+        case 0: s += "a"; break;
+        case 1: s += "b"; break;
+        case 2: s += "c"; break;
+        case 3: s += "d"; break;
+        case 4: s += "e"; break;
+        case 5: s += "f"; break;
+        case 6: s += "g"; break;
+        case 7: s += "h"; break;
+        default: s += "?"; break;
+    }
+    s += to_string(move.second.first+1);
+    movePiece(move.first.first,move.first.second,move.second.first,move.second.second);
+    if (MOVESWITCH) {
+        if (mv == WHITE)
+            mv = BLACK;
+        else
+            mv = WHITE;
+    }
+    return s;
+}
+
+pair<int,Node*> Node::maxChild(Color color,int depth,int alpha,int beta) {
+    if (depth == 0)
+        return make_pair(board->score(),this);
+    // if (children.size() == 0)
+        // return make_pair(board->score(),this);
+    int sc = -20000;  // smaller than any possible score
+    Node* n = nullptr;
+    for (pair<pair<int,int>,pair<int,int>> p : board->possibleMoves(color)) {
+        Board* bb = new Board(*board);
+        bb->movePiece(p.first.first,p.first.second,p.second.first,p.second.second);
+        children.push_back(new Node(bb,p));
+    }
+    for (Node* nn : children) {
+        if (nn != nullptr) {
+            pair<int,Node*> m = nn->minChild((color==WHITE ? BLACK : WHITE),depth-1,alpha,beta);
+            if (m.first > sc) {
+                sc = m.first;
+                n = nn;
+            }
+        }
+        if (sc >= beta)
+            // beta pruning
+            return make_pair(sc,nn);
+        alpha = max(alpha,sc);
+    }
+    return make_pair(sc,n);
+}
+
+pair<int,Node*> Node::minChild(Color color,int depth,int alpha,int beta) {
+    if (depth == 0)
+        return make_pair(board->score(),this);
+    // if (children.size() == 0)
+        // return make_pair(board->score(),this);
+    int sc = 20000;  // bigger than any possible score
+    Node* n = nullptr;
+    for (pair<pair<int,int>,pair<int,int>> p : board->possibleMoves(color)) {
+        Board* bb = new Board(*board);
+        bb->movePiece(p.first.first,p.first.second,p.second.first,p.second.second);
+        children.push_back(new Node(bb,p));
+    }
+    for (Node* nn : children) {
+        if (nn != nullptr) {
+            pair<int,Node*> m = nn->maxChild((color==WHITE ? BLACK : WHITE),depth-1,alpha,beta);
+            if (m.first < sc) {
+                sc = m.first;
+                n = nn;
+            }
+        }
+        if (sc <= alpha)
+            // alpha pruning
+            return make_pair(sc,nn);
+        beta = min(beta,sc);
+    }
+    return make_pair(sc,n);
 }
 
 int main() {
     string input;
     Board b;
     while (true) {
-        cout << "SCORE: " << b.score() << endl;
+        cout << endl << "SCORE: " << b.score() << endl;
         b.draw();
         if (b.move() == WHITE)
             cout << "White's move: ";
@@ -517,6 +618,17 @@ int main() {
             cin >> input;
         }
         b.recordMove(input);
+        cout << b.movestream() << endl;
+        
+        cout << endl << "SCORE: " << b.score() << endl;
+        b.draw();
+        if (b.move() == WHITE)
+            cout << "White's move: ";
+        else
+            cout << "Black's move: ";
+        string move = b.aiMove();
+        cout << move << endl;
+        b.recordMove(move);
         cout << b.movestream() << endl;
     }
     return 0;
