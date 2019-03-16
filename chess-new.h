@@ -3,6 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <sstream>
+#include <utility>
 using namespace std;
 
 enum Color{BLACK,WHITE,NOCOLOR};
@@ -25,7 +26,9 @@ public:
         
         mv = STARTCOLOR;
     }
-    Board(vector<string> v) : board(v) {}
+    Board(vector<string> v,Color c) : board(v),mv(c) {}
+    Board(Color c) : board(vector<string>()),mv(c) {}
+    Board(Board& b) : board(b.board),mv(b.mv)/*,ss(b.ss)*/ {}
     char pieceAt(int y,int x) { return board.at(y).at(x); }
     Color move() { return mv; }
     void movePiece(int yi,int xi,int yf,int xf) {
@@ -55,7 +58,7 @@ public:
     bool pawnWhiteMoveTo(int,int,int,int);
     bool pawnBlackMoveTo(int,int,int,int);
     vector<pair<int,int>> possibleMovesFrom(int,int);
-    vector<pair<pair<int,int>,pair<int,int>>> possibleMoves();
+    vector<pair<pair<int,int>,pair<int,int>>> possibleMoves(Color c);
     Color getColorByPiece(char p) {
         // return color of input piece (based on capitalization)
         // space 32, A-Z 65-90, a-z 97-122
@@ -78,9 +81,9 @@ public:
             for (int j=0; j<8; j++)
                 if (board.at(i).at(j) == ' ') {
                     if ((i+j) % 2)
-                            cout << ' ';
-                        else
-                            cout << '+';
+                        cout << ' ';
+                    else
+                        cout << '+';
                 }
                 else
                     cout << board.at(i).at(j);
@@ -92,8 +95,21 @@ public:
         cout << endl;
     }
     int score();
+    string aiMove();
 private:
     vector<string> board;
     Color mv;
     stringstream ss;  // to output move series
+};
+
+struct Node {
+    Board* board;
+    vector<Node*> children;
+    Node(Board* b,pair<pair<int,int>,pair<int,int>> mv,vector<Node*> cs) : board(b),move(mv),children(cs) {}
+    Node(Board* b,pair<pair<int,int>,pair<int,int>> mv) : board(b),move(mv),children(vector<Node*>()) {}
+    Node(Board* b) : board(b) {}
+    Color col;
+    pair<pair<int,int>,pair<int,int>> move;
+    pair<int,Node*> maxChild(Color,int,int alpha=-20000,int beta=20000);
+    pair<int,Node*> minChild(Color,int,int alpha=-20000,int beta=20000);
 };
